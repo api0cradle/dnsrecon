@@ -442,11 +442,15 @@ def brute_domain(res, dictfile, dom, filter_=None, verbose=False, ignore_wildcar
     # Check if Dictionary file exists
     if os.path.isfile(dictfile):
         with open(dictfile) as fd:
-            for line in fd:
-                target = f"{line.strip()}.{dom.strip()}"
-                if verbose:
+            targets = [f"{line.strip()}.{dom.strip()}" for line in fd]
+            if verbose:
+                for target in targets:
                     print_status(f"Trying {target}")
-                res = res.get_ip(target)
+        with futures.ThreadPoolExecutor(max_workers=thread_num) as executor:
+            futures = [executor.submit(res.get_ip, target) for target in targets]
+            # Process results as soon as a thread is finished
+            for future in futures:
+                res = future.result()
                 for type_, name_, address_or_target_ in res:
                     print_and_append = False
                     found_dict = {"type": type_, "name": name_}
