@@ -442,36 +442,37 @@ def brute_domain(res, dictfile, dom, filter_=None, verbose=False, ignore_wildcar
     # Check if Dictionary file exists
     if os.path.isfile(dictfile):
         with open(dictfile) as fd:
-            targets = [f"{line.strip()}.{dom.strip()}" for line in fd]
-            if verbose:
-                for target in targets:
-                    print_status(f"Trying {target}")
-        with futures.ThreadPoolExecutor(max_workers=thread_num) as executor:
-            futures = [executor.submit(res.get_ip, target) for target in targets]
-            # Process results as soon as a thread is finished
-            for future in futures:
-                res = future.result()
-                for type_, name_, address_or_target_ in res:
-                    print_and_append = False
-                    found_dict = {"type": type_, "name": name_}
-                    if type_ in ['A', 'AAAA']:
-                        # Filter Records if filtering was enabled
-                        if filter_:
-                            if wildcard_set and address_or_target_ not in wildcard_set:
+            chunk = 10000
+            while True:
+                lines = [f"{line.strip()}.{dom.strip()}" for line in itertools.islice(fd, chunk)]
+                if not lines:
+                    break
+                with futures.ThreadPoolExecutor(max_workers=thread_num) as executor:
+                    future_results = {executor.submit(res.get_ip, target): target for target in lines}
+                    # Display logs as soon as a thread is finished
+                    for future in futures.as_completed(future_results):
+                        res = future.result()
+                        for type_, name_, address_or_target_ in res:
+                            print_and_append = False
+                            found_dict = {"type": type_, "name": name_}
+                            if type_ in ['A', 'AAAA']:
+                                # Filter Records if filtering was enabled
+                                if filter_:
+                                    if wildcard_set and address_or_target_ not in wildcard_set:
+                                        print_and_append = True
+                                        found_dict["address"] = address_or_target_
+                                else:
+                                    print_and_append = True
+                                    found_dict["address"] = address_or_target_
+                            elif type_ == 'CNAME':
                                 print_and_append = True
-                                found_dict["address"] = address_or_target_
-                        else:
-                            print_and_append = True
-                            found_dict["address"] = address_or_target_
-                    elif type_ == 'CNAME':
-                        print_and_append = True
-                        found_dict["target"] = address_or_target_
+                                found_dict["target"] = address_or_target_
 
-                    if print_and_append:
-                        print_good(f"\t {type_} {name_} {address_or_target_}")
-                        found_hosts.append(found_dict)
+                            if print_and_append:
+                                print_good(f"\t {type_} {name_} {address_or_target_}")
+                                found_hosts.append(found_dict)
 
-                brtdata.append(res)
+                            brtdata.append(res)
 
     print_good(f"{len(found_hosts)} Records Found")
     return found_hosts
