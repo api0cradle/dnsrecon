@@ -421,8 +421,66 @@ def brute_reverse(res, ip_list, verbose=False, thread_num=None):
     print_good(f"{len(returned_records)} Records Found")
     return returned_records
 
-
 def brute_domain(res, dictfile, dom, filter_=None, verbose=False, ignore_wildcard=False, thread_num=None):
+    """
+    Main Function for domain brute forcing
+    """
+    global brtdata
+    brtdata = []
+
+    # Check if wildcard resolution is enabled
+    wildcard_set = check_wildcard(res, dom)
+    if wildcard_set and not ignore_wildcard:
+        print_status("Do you wish to continue? [Y/n]")
+        i = input().lower().strip()
+        if i not in ['y', 'yes']:
+            print_error("Domain bruteforcing aborted.")
+            return None
+
+    found_hosts = []
+
+    def brute(targets,thread_num):
+        with futures.ThreadPoolExecutor(max_workers=thread_num) as executor:
+            future_results = {executor.submit(res.get_ip, target): target for target in targets}
+            for future in futures.as_completed(future_results):
+                    res = future.result()
+                    for type_, name_, address_or_target_ in res:
+                        print_and_append = False
+                        found_dict = {"type": type_, "name": name_}
+                        if type_ in ['A', 'AAAA']:
+                            # Filter Records if filtering was enabled
+                            if filter_:
+                                if wildcard_set and address_or_target_ not in wildcard_set:
+                                    print_and_append = True
+                                    found_dict["address"] = address_or_target_
+                            else:
+                                print_and_append = True
+                                found_dict["address"] = address_or_target_
+                        elif type_ == 'CNAME':
+                            print_and_append = True
+                            found_dict["target"] = address_or_target_
+
+                        if print_and_append:
+                            print_good(f"\t {type_} {name_} {address_or_target_}")
+                            found_hosts.append(found_dict)
+
+                    brtdata.append(res)
+    # Check if Dictionary file exists
+    if os.path.isfile(dictfile):
+        with open(dictfile) as fd:
+            chunk = 10000
+            while True:
+                print("chunk")
+                lines = [f"{line.strip()}.{dom.strip()}" for line in itertools.islice(fd, chunk)]
+                if not lines:
+                    break
+                brute(lines,thread_num)
+                
+    print_good(f"{len(found_hosts)} Records Found")
+    return found_hosts
+
+
+def brute_domain2(res, dictfile, dom, filter_=None, verbose=False, ignore_wildcard=False, thread_num=None):
     """
     Main Function for domain brute forcing
     """
