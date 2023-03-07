@@ -37,6 +37,7 @@ from string import ascii_letters, digits
 import sqlite3
 import datetime
 import netaddr
+import itertools
 from random import SystemRandom
 from xml.dom import minidom
 from xml.etree import ElementTree
@@ -444,6 +445,7 @@ def brute_domain(res, dictfile, dom, filter_=None, verbose=False, ignore_wildcar
         with open(dictfile) as fd:
             chunk = 10000
             while True:
+                print("chunk")
                 lines = [f"{line.strip()}.{dom.strip()}" for line in itertools.islice(fd, chunk)]
                 if not lines:
                     break
